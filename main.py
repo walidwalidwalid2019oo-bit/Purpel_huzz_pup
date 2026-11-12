@@ -178,7 +178,9 @@ def controls():
         "action": pygame.Rect(850, 350, 88, 72),
         "scan": pygame.Rect(750, 438, 82, 76),
         "attack": pygame.Rect(650, 350, 88, 72),
+        "dash": pygame.Rect(550, 350, 88, 72),
         "shop": pygame.Rect(790, 70, 130, 38),
+        "inventory": pygame.Rect(790, 116, 130, 38),
     }
 
 def draw_button(surf, label, rect, active=False):
@@ -567,9 +569,10 @@ def main():
                     scan_edge = True
                 elif event.key == pygame.K_b:
                     shop_open = not shop_open
+                    if shop_open: inventory_open = False
                 elif event.key == pygame.K_i:
                     inventory_open = not inventory_open
-                    shop_open = False
+                    if inventory_open: shop_open = False
                 elif event.key == pygame.K_j:
                     perform_attack()
                 elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3) and shop_open:
@@ -624,10 +627,19 @@ def main():
             action_down = keys[pygame.K_e] or keys[pygame.K_f] or "action" in pressed
             scan_down = keys[pygame.K_q] or "scan" in pressed
             attack_down = keys[pygame.K_j] or "attack" in pressed
-            if "shop" in pressed: shop_open = True
+            shop_down = "shop" in pressed
+            if shop_down and not getattr(main, "shop_was_down", False):
+                shop_open = not shop_open
+                if shop_open: inventory_open = False
+            main.shop_was_down = shop_down
+            inventory_down = "inventory" in pressed
+            if inventory_down and not getattr(main, "inventory_was_down", False):
+                inventory_open = not inventory_open
+                if inventory_open: shop_open = False
+            main.inventory_was_down = inventory_down
             if attack_down and not getattr(main,"attack_was_down",False): perform_attack()
             main.attack_was_down = attack_down
-            dash_down = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+            dash_down = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] or "dash" in pressed
             action_edge = action_edge or (action_down and not interact_was_down)
             scan_edge = scan_edge or (scan_down and not getattr(main,"scan_was_down",False))
             dash_edge = dash_edge or (dash_down and not dash_was_down)
@@ -729,9 +741,10 @@ def main():
                 text(canvas,"The Awakening — prototype complete",(335,280),PALE,small)
                 text(canvas,"Press ESC to return to title",(370,310),LILAC,tiny)
 
-            for name,label in (("left","◀"),("right","▶"),("scan","SCAN"),("action","ACT"),("jump","JUMP"),("attack","ATTACK")):
+            for name,label in (("left","◀"),("right","▶"),("scan","SCAN"),("action","ACT"),("jump","JUMP"),("attack","ATTACK"),("dash","DASH")):
                 draw_button(canvas,label,btn[name],name in pressed)
-            draw_button(canvas,"SHOP [B]",btn["shop"],shop_open)
+            draw_button(canvas,"SHOP",btn["shop"],shop_open)
+            draw_button(canvas,"PACK",btn["inventory"],inventory_open)
             if shop_open: draw_shop(canvas)
             if inventory_open: draw_inventory(canvas)
             text(canvas,"I: INVENTORY",(24,395),LILAC,tiny)
