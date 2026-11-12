@@ -592,9 +592,18 @@ def main():
 
         # Convert window-space pointer positions to the fixed 960x540 game canvas.
         sw, sh = screen.get_size()
-        points = [(x*W,y*H) for x,y in finger_points.values()]
+        scale = min(sw/W, sh/H)
+        view_w, view_h = W*scale, H*scale
+        offset_x, offset_y = (sw-view_w)/2, (sh-view_h)/2
+        points = []
+        for nx, ny in finger_points.values():
+            px, py = nx*sw, ny*sh
+            if offset_x <= px <= offset_x+view_w and offset_y <= py <= offset_y+view_h:
+                points.append(((px-offset_x)/scale, (py-offset_y)/scale))
         if mouse_down:
-            points.append((mouse_pos[0]*W/sw,mouse_pos[1]*H/sh))
+            px, py = mouse_pos
+            if offset_x <= px <= offset_x+view_w and offset_y <= py <= offset_y+view_h:
+                points.append(((px-offset_x)/scale, (py-offset_y)/scale))
         pressed = set()
         for point in points:
             for name, rect in btn.items():
@@ -602,7 +611,8 @@ def main():
                     pressed.add(name)
 
         if game_state == "menu":
-            if points or "action" in pressed:
+            start_rect = pygame.Rect(350,320,260,62)
+            if keys[pygame.K_RETURN] or any(start_rect.collidepoint(point) for point in points):
                 if has_save() and load_game(): game_state = "play"
                 else: reset_game()
             canvas = pygame.Surface((W,H))
