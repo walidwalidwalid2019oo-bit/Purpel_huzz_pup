@@ -86,12 +86,36 @@ jobs:
           else:
               body = source[brace + 1:end - 1]
               replacement = (source[start:brace + 1]
-                  + "\n#ifdef __ANDROID__\n"
-                  + "    /* Android bionic lacks getgrent/setgrent/endgrent. */\n"
-                  + "    return PyList_New(0);\n"
-                  + "#else" + body + "\n#endif\n}")
+                  + "\\n#ifdef __ANDROID__\\n"
+                  + "    /* Android bionic lacks getgrent/setgrent/endgrent. */\\n"
+                  + "    return PyList_New(0);\\n"
+                  + "#else" + body + "\\n#endif\\n}")
               path.write_text(source[:start] + replacement + source[end:])
               print("Applied Android grp.getgrall compatibility patch:", path)
+
+          # Restore the helper executable expected by python-for-android.
+          # Some CPython installs place it under android-root/bin.
+          import shutil
+          build_dirs = list(Path(".buildozer").glob(
+              "android/platform/build-*/build/other_builds/python3/*/python3/android-build"
+          ))
+          for build_dir in build_dirs:
+              helper = build_dir / "libpythonbin.so"
+              if helper.is_file():
+                  continue
+              candidates = [
+                  build_dir / "python",
+                  build_dir / "python3.12",
+                  build_dir / "android-root/bin/python",
+                  build_dir / "android-root/bin/python3",
+                  build_dir / "android-root/bin/python3.12",
+              ]
+              source_bin = next((p for p in candidates if p.is_file()), None)
+              if source_bin is None:
+                  sys.exit("Python helper executable not found; checked: " +
+                           ", ".join(str(p) for p in candidates))
+              shutil.copy2(source_bin, helper)
+              print("Restored python-for-android helper:", helper, "from", source_bin)
           PY
             buildozer android debug
           fi
