@@ -86,10 +86,10 @@ jobs:
           else:
               body = source[brace + 1:end - 1]
               replacement = (source[start:brace + 1]
-                  + "\\n#ifdef __ANDROID__\\n"
-                  + "    /* Android bionic lacks getgrent/setgrent/endgrent. */\\n"
-                  + "    return PyList_New(0);\\n"
-                  + "#else" + body + "\\n#endif\\n}")
+                  + "\n#ifdef __ANDROID__\n"
+                  + "    /* Android bionic lacks getgrent/setgrent/endgrent. */\n"
+                  + "    return PyList_New(0);\n"
+                  + "#else" + body + "\n#endif\n}")
               path.write_text(source[:start] + replacement + source[end:])
               print("Applied Android grp.getgrall compatibility patch:", path)
 
