@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+purple_haze_save.json
+*.log
+.buildozer/
+bin/
+.dist/
+*.apk
+*.aab
+.vscode/
+.idea/
