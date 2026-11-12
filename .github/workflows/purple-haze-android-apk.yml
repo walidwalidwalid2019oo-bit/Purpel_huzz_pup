@@ -112,6 +112,20 @@ jobs:
                   shutil.rmtree(install_root)
                   print("Removed incomplete CPython install tree:", install_root)
 
+          # pygame's bundled SDL2 C extension still includes the pre-3.11
+          # location of CPython's private longintrepr.h header. Python 3.12
+          # moved it under cpython/. Patch the cached pygame source before retry.
+          python - <<'PY'
+          from pathlib import Path
+          candidates = list(Path(".buildozer").glob("**/src_c/_sdl2/sdl2.c"))
+          if not candidates:
+              print("No cached pygame SDL2 source found; retry will report its own error.")
+          for path in candidates:
+              source = path.read_text()
+              if '#include "longintrepr.h"' in source:
+                  source = source.replace('#include "longintrepr.h"', '#include "cpython/longintrepr.h"')
+                  path.write_text(source)
+                  print("Patched pygame CPython 3.12 header path:", path)
           PY
             buildozer android debug
           fi
