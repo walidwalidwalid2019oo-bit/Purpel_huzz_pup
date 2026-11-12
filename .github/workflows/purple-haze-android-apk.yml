@@ -93,29 +93,24 @@ jobs:
               path.write_text(source[:start] + replacement + source[end:])
               print("Applied Android grp.getgrall compatibility patch:", path)
 
-          # Restore the helper executable expected by python-for-android.
-          # Some CPython installs place it under android-root/bin.
+          # The first failed CPython compile can leave libpython3.12.so behind
+          # even though "make install" never ran. python-for-android then
+          # thinks Python is complete and skips the recipe on retry, leaving
+          # SDL2 without Python.h. Remove only the incomplete install markers
+          # and install tree so the patched CPython source is rebuilt cleanly.
           import shutil
-          build_dirs = list(Path(".buildozer").glob(
-              "android/platform/build-*/build/other_builds/python3/*/python3/android-build"
-          ))
-          for build_dir in build_dirs:
-              helper = build_dir / "libpythonbin.so"
-              if helper.is_file():
+          for source in candidates:
+              recipe_dir = source.parent.parent
+              android_build = recipe_dir / "android-build"
+              if not android_build.is_dir():
                   continue
-              candidates = [
-                  build_dir / "python",
-                  build_dir / "python3.12",
-                  build_dir / "android-root/bin/python",
-                  build_dir / "android-root/bin/python3",
-                  build_dir / "android-root/bin/python3.12",
-              ]
-              source_bin = next((p for p in candidates if p.is_file()), None)
-              if source_bin is None:
-                  sys.exit("Python helper executable not found; checked: " +
-                           ", ".join(str(p) for p in candidates))
-              shutil.copy2(source_bin, helper)
-              print("Restored python-for-android helper:", helper, "from", source_bin)
+              for stale_library in android_build.glob("libpython*.so"):
+                  stale_library.unlink()
+                  print("Removed incomplete CPython build marker:", stale_library)
+              install_root = android_build / "android-root"
+              if install_root.exists():
+                  shutil.rmtree(install_root)
+                  print("Removed incomplete CPython install tree:", install_root)
 
           # The SDL2 bootstrap compiles start.c against android-root/include.
           # If the Python recipe built successfully but did not install its headers,
