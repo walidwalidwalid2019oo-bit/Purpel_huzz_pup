@@ -1,0 +1,102 @@
+name: Build PURPLE HAZE Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "main.py"
+      - "buildozer.spec"
+      - "requirements.txt"
+      - ".github/workflows/purple-haze-android-apk.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Linux build dependencies
+        run: |
+          # GitHub-hosted runners can occasionally lose DNS access to Ubuntu mirrors.
+          # Retry the index refresh and package download before failing the build.
+          for attempt in 1 2 3 4 5; do
+            if sudo apt-get -o Acquire::Retries=3 update; then
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "Ubuntu package index refresh failed after 5 attempts."
+              exit 1
+            fi
+            sleep 20
+          done
+          for attempt in 1 2 3 4 5; do
+            if sudo apt-get -o Acquire::Retries=3 install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 cmake libffi-dev libssl-dev; then
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "Linux build dependency installation failed after 5 attempts."
+              exit 1
+            fi
+            sleep 20
+          done
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install buildozer cython==0.29.36
+      - name: Check Python syntax
+        run: python -m py_compile main.py
+      - name: Build debug APK (Android grp compatibility fallback)
+        shell: bash
+        run: |
+          set +e
+          buildozer android debug
+          build_status=$?
+          set -e
+          if [ "$build_status" -ne 0 ]; then
+            python - <<'PY'
+          from pathlib import Path
+          import sys
+          candidates = list(Path(".buildozer").glob("**/python3/Modules/grpmodule.c"))
+          if not candidates:
+              sys.exit("CPython grpmodule.c not found; refusing an unrelated patch.")
+          path = candidates[0]
+          source = path.read_text()
+          start = source.find("static PyObject *\ngrp_getgrall_impl")
+          if start < 0:
+              sys.exit("grp_getgrall_impl not found; source layout changed.")
+          brace = source.find("{", start)
+          depth = 0
+          end = None
+          for i in range(brace, len(source)):
+              if source[i] == "{":
+                  depth += 1
+              elif source[i] == "}":
+                  depth -= 1
+                  if depth == 0:
+                      end = i + 1
+                      break
+          if end is None:
+              sys.exit("Could not parse grp_getgrall_impl.")
+          if "__ANDROID__" in source[start:end]:
+              print("Android grp fallback already applied.")
+          else:
+              body = source[brace + 1:end - 1]
+              replacement = (source[start:brace + 1]
+                  + "\n#ifdef __ANDROID__\n"
+                  + "    /* Android bionic lacks getgrent/setgrent/endgrent. */\n"
+                  + "    return PyList_New(0);\n"
+                  + "#else" + body + "\n#endif\n}")
+              path.write_text(source[:start] + replacement + source[end:])
+              print("Applied Android grp.getgrall compatibility patch:", path)
+          PY
+            buildozer android debug
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: purple-haze-debug-apk
+          path: bin/*.apk
+          if-no-files-found: error
