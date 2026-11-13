@@ -5,7 +5,7 @@ package.domain = org.voidforge
 source.dir = .
 source.include_exts = py,md,txt
 version = 0.1.0
-requirements = python3==3.12.10,hostpython3==3.12.10,pygame
+requirements = python3==3.10.12,hostpython3==3.10.12,pygame
 orientation = landscape
 fullscreen = 1
 android.accept_sdk_license = True
