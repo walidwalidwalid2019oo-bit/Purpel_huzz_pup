@@ -131,7 +131,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish APK as a GitHub Release asset
-        if: github.ref == 'refs/heads/fix/python310-pygame-android'
+        if: github.ref == 'refs/heads/fix/python310-pygame-android' || github.ref == 'refs/heads/fix/publish-apk-release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: purple-haze-build-${{ github.run_number }}
