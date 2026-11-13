@@ -49,7 +49,7 @@ jobs:
           python -m pip install buildozer cython==0.29.36
       - name: Check Python syntax
         run: python -m py_compile main.py
-      - name: Build debug APK (Android grp compatibility fallback)
+      - name: Build debug APK (Android compatibility fallback)
         shell: bash
         run: |
           set +e
@@ -59,73 +59,65 @@ jobs:
           if [ "$build_status" -ne 0 ]; then
             python - <<'PY'
           from pathlib import Path
-          import sys
-          candidates = list(Path(".buildozer").glob("**/python3/Modules/grpmodule.c"))
-          if not candidates:
-              sys.exit("CPython grpmodule.c not found; refusing an unrelated patch.")
-          path = candidates[0]
-          source = path.read_text()
-          start = source.find("static PyObject *\ngrp_getgrall_impl")
-          if start < 0:
-              sys.exit("grp_getgrall_impl not found; source layout changed.")
-          brace = source.find("{", start)
-          depth = 0
-          end = None
-          for i in range(brace, len(source)):
-              if source[i] == "{":
-                  depth += 1
-              elif source[i] == "}":
-                  depth -= 1
-                  if depth == 0:
-                      end = i + 1
-                      break
-          if end is None:
-              sys.exit("Could not parse grp_getgrall_impl.")
-          if "__ANDROID__" in source[start:end]:
-              print("Android grp fallback already applied.")
-          else:
-              body = source[brace + 1:end - 1]
-              replacement = (source[start:brace + 1]
-                  + "\n#ifdef __ANDROID__\n"
-                  + "    /* Android bionic lacks getgrent/setgrent/endgrent. */\n"
-                  + "    return PyList_New(0);\n"
-                  + "#else" + body + "\n#endif\n}")
-              path.write_text(source[:start] + replacement + source[end:])
-              print("Applied Android grp.getgrall compatibility patch:", path)
-
-          # The first failed CPython compile can leave libpython3.12.so behind
-          # even though "make install" never ran. python-for-android then
-          # thinks Python is complete and skips the recipe on retry, leaving
-          # SDL2 without Python.h. Remove only the incomplete install markers
-          # and install tree so the patched CPython source is rebuilt cleanly.
           import shutil
-          for source in candidates:
-              recipe_dir = source.parent.parent
-              android_build = recipe_dir / "android-build"
-              if not android_build.is_dir():
-                  continue
-              for stale_library in android_build.glob("libpython*.so"):
-                  stale_library.unlink()
-                  print("Removed incomplete CPython build marker:", stale_library)
-              install_root = android_build / "android-root"
-              if install_root.exists():
-                  shutil.rmtree(install_root)
-                  print("Removed incomplete CPython install tree:", install_root)
+          import sys
 
-          # pygame's bundled SDL2 C extension still includes the pre-3.11
-          # location of CPython's private longintrepr.h header. Python 3.12
-          # moved it under cpython/. Patch the cached pygame source before retry.
-          python - <<'PY'
-          from pathlib import Path
-          candidates = list(Path(".buildozer").glob("**/src_c/_sdl2/sdl2.c"))
-          if not candidates:
-              print("No cached pygame SDL2 source found; retry will report its own error.")
-          for path in candidates:
+          root = Path(".buildozer")
+          grp_files = list(root.glob("**/python3/Modules/grpmodule.c"))
+          if not grp_files:
+              sys.exit("CPython grpmodule.c not found; cannot apply Android compatibility patch.")
+
+          for path in grp_files:
               source = path.read_text()
-              if '#include "longintrepr.h"' in source:
-                  source = source.replace('#include "longintrepr.h"', '#include "cpython/longintrepr.h"')
-                  path.write_text(source)
-                  print("Patched pygame CPython 3.12 header path:", path)
+              marker = "grp_getgrall_impl"
+              pos = source.find(marker)
+              if pos < 0:
+                  sys.exit(f"{marker} not found in {path}")
+              start = source.rfind("static PyObject *", 0, pos)
+              brace = source.find("{", pos)
+              depth = 0
+              finish = -1
+              for i in range(brace, len(source)):
+                  if source[i] == "{":
+                      depth += 1
+                  elif source[i] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          finish = i + 1
+                          break
+              if start < 0 or brace < 0 or finish < 0:
+                  sys.exit(f"Could not safely locate {marker} body in {path}")
+              if "__ANDROID__" not in source[start:finish]:
+                  body = source[brace + 1:finish - 1]
+                  replacement = (source[start:brace + 1]
+                      + "\n#ifdef __ANDROID__\n"
+                      + "    /* Android bionic does not expose getgrent APIs. */\n"
+                      + "    return PyList_New(0);\n"
+                      + "#else" + body + "\n#endif\n}")
+                  path.write_text(source[:start] + replacement + source[finish:])
+                  print("Patched Android grp compatibility:", path)
+
+          # Patch pygame's stale CPython private-header include, if pygame
+          # source has already been unpacked by the first build attempt.
+          for path in root.glob("**/src_c/_sdl2/sdl2.c"):
+              source = path.read_text()
+              updated = source.replace('#include "longintrepr.h"',
+                                       '#include "cpython/longintrepr.h"')
+              if updated != source:
+                  path.write_text(updated)
+                  print("Patched pygame Python 3.12 header:", path)
+
+          # Force CPython to rebuild after its first failed compile.
+          for path in grp_files:
+              android_build = path.parent.parent / "android-build"
+              if android_build.is_dir():
+                  for lib in android_build.glob("libpython*.so"):
+                      lib.unlink()
+                      print("Removed incomplete build marker:", lib)
+                  install_root = android_build / "android-root"
+                  if install_root.exists():
+                      shutil.rmtree(install_root)
+                      print("Removed incomplete install tree:", install_root)
           PY
             buildozer android debug
           fi
