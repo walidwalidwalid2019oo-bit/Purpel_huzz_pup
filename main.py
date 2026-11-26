@@ -6,6 +6,8 @@ import os
 import tempfile
 import pygame
 
+from save_data import normalize_save_data
+
 # PURPLE HAZE 2.0 — phone-first playable vertical-slice prototype
 pygame.init()
 pygame.display.set_caption("PURPLE HAZE 2.0")
@@ -80,26 +82,39 @@ def load_game():
     try:
         with open(SAVE_PATH, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-        if not isinstance(data, dict) or data.get("version") != SAVE_VERSION: return False
-        health = max(1, min(3, int(data.get("health", 3))))
-        coins = max(0, int(data.get("coins", 0)))
-        old = data.get("inventory", {})
-        inventory = {k: max(0, int(old.get(k, 0))) for k in ("Veil Shards", "Moon Moss", "Ancient Relics")}
-        found_places = set(x for x in data.get("found_places", []) if x in ("outpost", "caves"))
-        valid = ("Shadow Blade", "Veil Scythe", "Void Gauntlet")
-        owned_weapons = [x for x in data.get("owned_weapons", ["Shadow Blade"]) if x in valid]
-        if "Shadow Blade" not in owned_weapons: owned_weapons.insert(0, "Shadow Blade")
-        selected_weapon = data.get("selected_weapon", "Shadow Blade")
-        if selected_weapon not in owned_weapons: selected_weapon = "Shadow Blade"
-        positions = data.get("crystals", crystal_spawns)
-        crystals = [pygame.Rect(int(p[0]), int(p[1]), 22, 34) for p in positions if isinstance(p, list) and len(p) == 2]
-        won = bool(data.get("won", False))
-        pos = data.get("player", list(spawn))
-        if isinstance(pos, list) and len(pos) == 2:
-            player.topleft = (int(clamp(int(pos[0]), 0, WORLD_W-36)), int(clamp(int(pos[1]), 0, H-80)))
-        return True
-    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+    except (OSError, ValueError, TypeError):
         return False
+
+    # Validate the complete payload before changing any live game state.
+    normalized = normalize_save_data(
+        data,
+        version=SAVE_VERSION,
+        spawn=spawn,
+        world_width=WORLD_W,
+        screen_height=H,
+        crystal_spawns=crystal_spawns,
+        player_size=(36, 58),
+    )
+    if normalized is None:
+        return False
+
+    try:
+        restored_crystals = [
+            pygame.Rect(x, y, 22, 34) for x, y in normalized["crystals"]
+        ]
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+    health = normalized["health"]
+    coins = normalized["coins"]
+    inventory = dict(normalized["inventory"])
+    found_places = set(normalized["found_places"])
+    owned_weapons = list(normalized["owned_weapons"])
+    selected_weapon = normalized["selected_weapon"]
+    crystals = restored_crystals
+    won = normalized["won"]
+    player.topleft = normalized["player"]
+    return True
 
 # World layout
 WORLD_W = 3000
@@ -558,7 +573,9 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     if dialogue_open: dialogue_open = False
-                    elif game_state == "play": game_state = "menu"
+                    elif game_state == "play":
+                        save_game()
+                        game_state = "menu"
                     else: running = False
                 elif event.key == pygame.K_RETURN and game_state == "menu":
                     if has_save() and load_game(): game_state = "play"

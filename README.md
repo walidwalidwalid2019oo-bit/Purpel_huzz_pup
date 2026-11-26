@@ -32,10 +32,10 @@ python main.py
 ```
 
 ## Android
-The project includes a Buildozer configuration and GitHub Actions workflow for an Android debug APK. The workflow checks Python syntax, builds with Buildozer, and uploads an APK artifact if successful. A configured workflow is not proof that a build has succeeded; check the Actions tab for the latest run and artifact.
+The project includes a Buildozer configuration and GitHub Actions workflow for an Android debug APK. The workflow runs save-data regression tests and Python syntax checks, builds with Buildozer, and uploads an APK artifact if successful. A configured workflow is not proof that a build has succeeded; check the Actions tab for the latest run and artifact.
 
 ## Prototype limitations
-This is an early playable prototype, not the finished game. The village and cave are currently discovery landmarks, not full explorable interiors. Inventory/discovery data is not yet saved between app launches. Shop, combat, creature taming, NPCs, quests, full cave levels, final pixel-art assets, music and voice acting are still under development. HILPO's responses are scripted, not connected to an AI model.
+This is an early playable prototype, not the finished game. The village and cave are currently discovery landmarks, not full explorable interiors. Local progress is saved in a versioned JSON file, including player position, health, currency, inventory, discoveries, owned weapons and remaining shards. This is device-local prototype storage; Android persistence across app restarts, backup/restore, cloud sync and cross-device migration still need verification. Shop, combat, creature taming, NPCs, quests, full cave levels, final pixel-art assets, music and voice acting are still under development. HILPO's responses are scripted, not connected to an AI model.
 
 ## Direction
 PURPLE HAZE is a dark, lonely, psychological open-world adventure on VESPER, with connected regions, exploration and combat, discoverable/tameable creatures, and multiple endings shaped by player decisions.
