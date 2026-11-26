@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - "main.py"
+      - "save_data.py"
+      - "tests/**"
       - "buildozer.spec"
       - "requirements.txt"
       - ".github/workflows/purple-haze-android-apk.yml"
@@ -47,8 +49,10 @@ jobs:
           done
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install buildozer cython==0.29.36
+      - name: Run Python regression tests
+        run: python -m unittest discover -s tests -v
       - name: Check Python syntax
-        run: python -m py_compile main.py
+        run: python -m py_compile main.py save_data.py tests/test_save_data.py tests/test_save_flow.py
       - name: Build debug APK (Android compatibility fallback)
         shell: bash
         run: |
