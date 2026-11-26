@@ -14,6 +14,16 @@ def dotted_name(node):
     return None
 
 
+def is_equality(node, left, right):
+    return (
+        isinstance(node, ast.Compare)
+        and len(node.ops) == 1
+        and isinstance(node.ops[0], ast.Eq)
+        and dotted_name(node.left) == left
+        and dotted_name(node.comparators[0]) == right
+    )
+
+
 def is_string_equality(node, left, value):
     return (
         isinstance(node, ast.Compare)
@@ -36,7 +46,7 @@ class SaveFlowTests(unittest.TestCase):
         escape_handler = next(
             node for node in ast.walk(main_function)
             if isinstance(node, ast.If)
-            and is_string_equality(node.test, "event.key", "pygame.K_ESCAPE")
+            and is_equality(node.test, "event.key", "pygame.K_ESCAPE")
         )
         dialogue_handler = escape_handler.body[0]
         self.assertIsInstance(dialogue_handler, ast.If)
