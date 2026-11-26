@@ -14,13 +14,14 @@ def dotted_name(node):
     return None
 
 
-def is_equality(node, left, right):
+def is_string_equality(node, left, value):
     return (
         isinstance(node, ast.Compare)
         and len(node.ops) == 1
         and isinstance(node.ops[0], ast.Eq)
         and dotted_name(node.left) == left
-        and dotted_name(node.comparators[0]) == right
+        and isinstance(node.comparators[0], ast.Constant)
+        and node.comparators[0].value == value
     )
 
 
@@ -35,15 +36,13 @@ class SaveFlowTests(unittest.TestCase):
         escape_handler = next(
             node for node in ast.walk(main_function)
             if isinstance(node, ast.If)
-            and is_equality(node.test, "event.key", "pygame.K_ESCAPE")
+            and is_string_equality(node.test, "event.key", "pygame.K_ESCAPE")
         )
         dialogue_handler = escape_handler.body[0]
         self.assertIsInstance(dialogue_handler, ast.If)
         play_branch = dialogue_handler.orelse[0]
         self.assertIsInstance(play_branch, ast.If)
-        self.assertTrue(is_equality(play_branch.test, "game_state", "str"))
-        self.assertIsInstance(play_branch.test.comparators[0], ast.Constant)
-        self.assertEqual(play_branch.test.comparators[0].value, "play")
+        self.assertTrue(is_string_equality(play_branch.test, "game_state", "play"))
 
         save_index = next(
             index for index, node in enumerate(play_branch.body)
